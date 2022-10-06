@@ -67,6 +67,7 @@ class GradientReconstructor():
 
 
         stats = defaultdict(list)
+        # initialize the recovery image:
         x = self._init_images(img_shape)
         scores = torch.zeros(self.config['restarts'])
 
