@@ -4,6 +4,7 @@ Optional arguments can be found in inversefed/options.py
 """
 
 import torch
+from torch import nn
 import torchvision
 
 import numpy as np
@@ -27,6 +28,93 @@ defs.epochs = args.epochs
 if args.deterministic:
     inversefed.utils.set_deterministic()
 
+def train_model_w_open_set(model, train_dataset):
+    trainloader, outsetloader = split_trainset(train_dataset)
+    def rough_train(model, trainloader):
+        model.train()
+        model.cuda()
+        criterion = nn.CELoss()
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+        loss_per_epoch = []
+        for inputs, labels in trainloader:
+            inputs, labels = inputs.cuda(), labels.cuda()
+            # forward:
+            pred = model(inputs)
+            loss = criterion(pred, labels)
+            # backward:
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            # append:
+            loss_per_epoch.append(loss.item())
+        return model, loss_per_epoch
+
+    def out_set_train(model, trainloader, outsetloader):
+        model.train()
+        model.cuda()
+        criterion = nn.CELoss()
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+        loss_per_epoch = []
+        for inputs, labels in trainloader:
+            inputs, labels = inputs.cuda(), labels.cuda()
+            # forward:
+            pred = model(inputs)
+            loss = criterion(pred, labels)
+            # backward:
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            # append:
+            loss_per_epoch.append(loss.item())
+        return model, loss_per_epoch
+
+def split_trainset(train_dataset, valid_size=0.3, batch_size=64, random_seed=1, shuffle=True, num_workers=8, show_sample=False):
+    '''
+    def get_train_valid_loader(data_dir,
+                           batch_size,
+                           augment,
+                           random_seed,
+                           valid_size=0.1,
+                           shuffle=True,
+                           show_sample=False,
+                           num_workers=4,
+                           pin_memory=False):
+    '''
+    num_train = len(train_dataset)
+    indices = list(range(num_train))
+    split = int(np.floor(valid_size * num_train))
+
+    if shuffle:
+        np.random.seed(random_seed)
+        np.random.shuffle(indices)
+
+    train_idx, valid_idx = indices[split:], indices[:split]
+    train_sampler = SubsetRandomSampler(train_idx)
+    valid_sampler = SubsetRandomSampler(valid_idx)
+
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=batch_size, sampler=train_sampler,
+        num_workers=num_workers, pin_memory=pin_memory,
+    )
+    valid_loader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=1, sampler=valid_sampler,
+        num_workers=num_workers, pin_memory=pin_memory,
+    )
+
+    # visualize some images
+    if show_sample:
+        sample_loader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=9, shuffle=shuffle,
+            num_workers=num_workers, pin_memory=pin_memory,
+        )
+        data_iter = iter(sample_loader)
+        images, labels = data_iter.next()
+        X = images.numpy().transpose([0, 2, 3, 1])
+        plot_images(X, labels)
+
+    return train_loader, valid_loader
+
+
 
 if __name__ == "__main__":
     # Choose GPU device and print status information:
@@ -36,7 +124,7 @@ if __name__ == "__main__":
     # Prepare for training
 
     # Get data:
-    loss_fn, trainloader, validloader = inversefed.construct_dataloaders(args.dataset, defs, data_path=args.data_path)
+    loss_fn, train_set, valid_set, trainloader, validloader = inversefed.construct_dataloaders(args.dataset, defs, data_path=args.data_path)
 
     dm = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_mean"), **setup)[:, None, None]
     ds = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_std"), **setup)[:, None, None]
@@ -50,6 +138,8 @@ if __name__ == "__main__":
     else:
         model, model_seed = inversefed.construct_model(args.model, num_classes=10, num_channels=3)
     model.to(**setup)
+    if args.open_aug:
+        train_model_w_open_set(model, train_set)
     model.eval()
 
     # Sanity check: Validate model accuracy

@@ -145,3 +145,4 @@ scripts/
 .DS_Store
 *.xml
 *.iml
+.idea/.name

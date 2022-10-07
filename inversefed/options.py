@@ -19,6 +19,7 @@ def options():
     parser.add_argument('--num_images', default=1, type=int, help='How many images should be recovered from the given gradient.')
     parser.add_argument('--target_id', default=None, type=int, help='Cifar validation image used for reconstruction.')
     parser.add_argument('--label_flip', action='store_true', help='Dishonest server permuting weights in classification layer.')
+    parser.add_argument('--open_aug', default=True, type=bool, help='If True, use open-set data to augmentationally train the model.')
 
     # Rec. parameters
     parser.add_argument('--optim', default='ours', type=str, help='Use our reconstruction method or the DLG method.')
