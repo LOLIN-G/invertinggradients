@@ -33,7 +33,7 @@ def train_model_w_open_set(model, train_dataset):
     def rough_train(model, trainloader):
         model.train()
         model.cuda()
-        criterion = nn.CELoss()
+        criterion = nn.MSELoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
         loss_per_epoch = []
         for inputs, labels in trainloader:
