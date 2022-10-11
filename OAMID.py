@@ -58,7 +58,7 @@ def split_trainset(train_dataset, valid_size=0.3, batch_size=64, random_seed=1, 
         num_workers=num_workers, drop_last=False,
     )
     valid_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=1, sampler=valid_sampler,
+        train_dataset, batch_size=batch_size, sampler=valid_sampler,
         num_workers=num_workers, drop_last=False,
     )
 
@@ -75,7 +75,35 @@ def split_trainset(train_dataset, valid_size=0.3, batch_size=64, random_seed=1, 
 
     return train_loader, valid_loader
 
-def rough_train(model, trainloader):
+def search_in_outset(model, validloader, outsetloader):
+    model.zero_grad()
+    model.eval()
+    model.cuda()
+    criterion = nn.CELoss()
+    loss_per_epoch = []
+    # train with train data:
+    count = 0
+    accumulated_grad = [torch.zeros_like(p.data).cuda() for p in model.parameters()]
+    for inputs, labels in validloader:
+        count += 1
+        inputs, labels = inputs.cuda(), labels.cuda()
+        # forward:
+        pred = model(inputs)
+        loss = criterion(pred, labels)
+        # backward with no optimizer.zero_grad():
+        loss.backward()
+        # append:
+        loss_per_epoch.append(loss.item())
+    for i, p in enumerate(model.parameters()):
+        accumulated_grad[i] += p.grad.data
+    loss_per_epoch = sum(loss_per_epoch) / len(loss_per_epoch)
+    model.zero_grad()
+    return 
+
+
+
+
+def in_set_train(model, trainloader):
     model.train()
     model.cuda()
     criterion = nn.MSELoss()
@@ -92,14 +120,17 @@ def rough_train(model, trainloader):
         optimizer.step()
         # append:
         loss_per_epoch.append(loss.item())
+    loss_per_epoch = sum(loss_per_epoch) / len(loss_per_epoch)
     return model, loss_per_epoch
 
-def out_set_train(model, trainloader, outsetloader):
+def out_set_train(model, trainloader, validloader, outsetloader):
+    # the outset loader is ImageNet
     model.train()
     model.cuda()
     criterion = nn.CELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     loss_per_epoch = []
+    # train with train data:
     for inputs, labels in trainloader:
         inputs, labels = inputs.cuda(), labels.cuda()
         # forward:
@@ -112,24 +143,29 @@ def out_set_train(model, trainloader, outsetloader):
         # append:
         loss_per_epoch.append(loss.item())
     loss_per_epoch = sum(loss_per_epoch) / len(loss_per_epoch)
+
+    # compare the gradient similarity with outset data
+    # or use influence function:
+
     return model, loss_per_epoch
 
 def train_model_w_open_set(model, train_dataset, validloader):
-    trainloader, outsetloader = split_trainset(train_dataset)
-    testloader = validloader
+    trainloader, validloader = split_trainset(train_dataset)
 
     # train:
     epochs = 100
     print('Rough train:')
     for t in range(epochs):
-        model, loss_per_epoch = rough_train(model, trainloader)
+        model, loss_per_epoch = in_set_train(model, trainloader)
         print('Epoch: {}\tLoss: {}'.format(t, loss_per_epoch))
         _t = t
         if loss_per_epoch <= 0.01:
             break
     print('Out set train:')
+    if _t >= epochs:
+        _t = epochs - 10
     for t in range(epochs - _t, epochs):
-        model, loss_per_epoch = out_set_train(model, trainloader, outsetloader)
+        model, loss_per_epoch = out_set_train(model, trainloader, validloader)
         print('Epoch: {}\tLoss: {}'.format(t, loss_per_epoch))
 
 
