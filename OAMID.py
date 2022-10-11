@@ -240,7 +240,7 @@ if __name__ == "__main__":
             )
         img_shape = (3, ground_truth.shape[2], ground_truth.shape[3])
 
-    else:
+    else: # multi-image
         ground_truth, labels = [], []
         if args.target_id is None:
             target_id = np.random.randint(len(validloader.dataset))
@@ -249,7 +249,7 @@ if __name__ == "__main__":
         while len(labels) < args.num_images:
             img, label = validloader.dataset[target_id]
             target_id += 1
-            if label not in labels:
+            if label not in labels: # different labels in
                 labels.append(torch.as_tensor((label,), device=setup["device"]))
                 ground_truth.append(img.to(**setup))
 
