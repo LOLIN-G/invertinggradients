@@ -76,6 +76,8 @@ def split_trainset(train_dataset, valid_size=0.3, batch_size=64, random_seed=1, 
     return train_loader, valid_loader
 
 def search_in_outset(model, validloader, outsetloader):
+    # outset loader is ImageNet
+    # the batch size of outset loader should be 1
     model.zero_grad()
     model.eval()
     model.cuda()
@@ -97,8 +99,15 @@ def search_in_outset(model, validloader, outsetloader):
     for i, p in enumerate(model.parameters()):
         accumulated_grad[i] += p.grad.data
     loss_per_epoch = sum(loss_per_epoch) / len(loss_per_epoch)
+
+    # search one by one to find the augmented data
     model.zero_grad()
-    return 
+    for data, label in outsetloader:
+        data, label = data.cuda(), label.cuda()
+        pred = model(data)
+        loss = criterion(pred, label)
+        loss.backward()
+    return
 
 
 
