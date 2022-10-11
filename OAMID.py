@@ -29,63 +29,6 @@ defs.epochs = args.epochs
 if args.deterministic:
     inversefed.utils.set_deterministic()
 
-def rough_train(model, trainloader):
-    model.train()
-    model.cuda()
-    criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    loss_per_epoch = []
-    for inputs, labels in trainloader:
-        inputs, labels = inputs.cuda(), labels.cuda()
-        # forward:
-        pred = model(inputs)
-        loss = criterion(pred, labels)
-        # backward:
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        # append:
-        loss_per_epoch.append(loss.item())
-    return model, loss_per_epoch
-def out_set_train(model, trainloader, outsetloader):
-    model.train()
-    model.cuda()
-    criterion = nn.CELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    loss_per_epoch = []
-    for inputs, labels in trainloader:
-        inputs, labels = inputs.cuda(), labels.cuda()
-        # forward:
-        pred = model(inputs)
-        loss = criterion(pred, labels)
-        # backward:
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        # append:
-        loss_per_epoch.append(loss.item())
-    loss_per_epoch = sum(loss_per_epoch) / len(loss_per_epoch)
-    return model, loss_per_epoch
-
-def train_model_w_open_set(model, train_dataset, validloader):
-    trainloader, outsetloader = split_trainset(train_dataset)
-    testloader = validloader
-
-    # train:
-    epochs = 100
-    print('Rough train:')
-    for t in range(epochs):
-        model, loss_per_epoch = rough_train(model, trainloader)
-        print('Epoch: {}\tLoss: {}'.format(t, loss_per_epoch))
-        _t = t
-        if loss_per_epoch <= 0.01:
-            break
-    print('Out set train:')
-    for t in range(epochs - _t, epochs):
-        model, loss_per_epoch = out_set_train(model, trainloader, outsetloader)
-        print('Epoch: {}\tLoss: {}'.format(t, loss_per_epoch))
-
-
 def split_trainset(train_dataset, valid_size=0.3, batch_size=64, random_seed=1, shuffle=True, num_workers=8, show_sample=False):
     '''
     def get_train_valid_loader(data_dir,
@@ -131,6 +74,65 @@ def split_trainset(train_dataset, valid_size=0.3, batch_size=64, random_seed=1, 
     #     plot_images(X, labels)
 
     return train_loader, valid_loader
+
+def rough_train(model, trainloader):
+    model.train()
+    model.cuda()
+    criterion = nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    loss_per_epoch = []
+    for inputs, labels in trainloader:
+        inputs, labels = inputs.cuda(), labels.cuda()
+        # forward:
+        pred = model(inputs)
+        loss = criterion(pred, labels)
+        # backward:
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        # append:
+        loss_per_epoch.append(loss.item())
+    return model, loss_per_epoch
+
+def out_set_train(model, trainloader, outsetloader):
+    model.train()
+    model.cuda()
+    criterion = nn.CELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    loss_per_epoch = []
+    for inputs, labels in trainloader:
+        inputs, labels = inputs.cuda(), labels.cuda()
+        # forward:
+        pred = model(inputs)
+        loss = criterion(pred, labels)
+        # backward:
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        # append:
+        loss_per_epoch.append(loss.item())
+    loss_per_epoch = sum(loss_per_epoch) / len(loss_per_epoch)
+    return model, loss_per_epoch
+
+def train_model_w_open_set(model, train_dataset, validloader):
+    trainloader, outsetloader = split_trainset(train_dataset)
+    testloader = validloader
+
+    # train:
+    epochs = 100
+    print('Rough train:')
+    for t in range(epochs):
+        model, loss_per_epoch = rough_train(model, trainloader)
+        print('Epoch: {}\tLoss: {}'.format(t, loss_per_epoch))
+        _t = t
+        if loss_per_epoch <= 0.01:
+            break
+    print('Out set train:')
+    for t in range(epochs - _t, epochs):
+        model, loss_per_epoch = out_set_train(model, trainloader, outsetloader)
+        print('Epoch: {}\tLoss: {}'.format(t, loss_per_epoch))
+
+
 
 
 
