@@ -5,6 +5,7 @@ Optional arguments can be found in inversefed/options.py
 
 import torch
 from torch import nn
+from torch.utils.data import SubsetRandomSampler
 import torchvision
 
 import numpy as np
@@ -28,48 +29,47 @@ defs.epochs = args.epochs
 if args.deterministic:
     inversefed.utils.set_deterministic()
 
+def rough_train(model, trainloader):
+    model.train()
+    model.cuda()
+    criterion = nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    loss_per_epoch = []
+    for inputs, labels in trainloader:
+        inputs, labels = inputs.cuda(), labels.cuda()
+        # forward:
+        pred = model(inputs)
+        loss = criterion(pred, labels)
+        # backward:
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        # append:
+        loss_per_epoch.append(loss.item())
+    return model, loss_per_epoch
+def out_set_train(model, trainloader, outsetloader):
+    model.train()
+    model.cuda()
+    criterion = nn.CELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    loss_per_epoch = []
+    for inputs, labels in trainloader:
+        inputs, labels = inputs.cuda(), labels.cuda()
+        # forward:
+        pred = model(inputs)
+        loss = criterion(pred, labels)
+        # backward:
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        # append:
+        loss_per_epoch.append(loss.item())
+    loss_per_epoch = sum(loss_per_epoch) / len(loss_per_epoch)
+    return model, loss_per_epoch
+
 def train_model_w_open_set(model, train_dataset, validloader):
     trainloader, outsetloader = split_trainset(train_dataset)
     testloader = validloader
-    def
-    def rough_train(model, trainloader):
-        model.train()
-        model.cuda()
-        criterion = nn.MSELoss()
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-        loss_per_epoch = []
-        for inputs, labels in trainloader:
-            inputs, labels = inputs.cuda(), labels.cuda()
-            # forward:
-            pred = model(inputs)
-            loss = criterion(pred, labels)
-            # backward:
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            # append:
-            loss_per_epoch.append(loss.item())
-        return model, loss_per_epoch
-
-    def out_set_train(model, trainloader, outsetloader):
-        model.train()
-        model.cuda()
-        criterion = nn.CELoss()
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-        loss_per_epoch = []
-        for inputs, labels in trainloader:
-            inputs, labels = inputs.cuda(), labels.cuda()
-            # forward:
-            pred = model(inputs)
-            loss = criterion(pred, labels)
-            # backward:
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            # append:
-            loss_per_epoch.append(loss.item())
-        loss_per_epoch = sum(loss_per_epoch) / len(loss_per_epoch)
-        return model, loss_per_epoch
 
     # train:
     epochs = 100
@@ -112,23 +112,23 @@ def split_trainset(train_dataset, valid_size=0.3, batch_size=64, random_seed=1, 
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=batch_size, sampler=train_sampler,
-        num_workers=num_workers, pin_memory=pin_memory,
+        num_workers=num_workers, drop_last=False,
     )
     valid_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=1, sampler=valid_sampler,
-        num_workers=num_workers, pin_memory=pin_memory,
+        num_workers=num_workers, drop_last=False,
     )
 
     # visualize some images
-    if show_sample:
-        sample_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=9, shuffle=shuffle,
-            num_workers=num_workers, pin_memory=pin_memory,
-        )
-        data_iter = iter(sample_loader)
-        images, labels = data_iter.next()
-        X = images.numpy().transpose([0, 2, 3, 1])
-        plot_images(X, labels)
+    # if show_sample:
+    #     sample_loader = torch.utils.data.DataLoader(
+    #         train_dataset, batch_size=9, shuffle=shuffle,
+    #         num_workers=num_workers, pin_memory=pin_memory,
+    #     )
+    #     data_iter = iter(sample_loader)
+    #     images, labels = data_iter.next()
+    #     X = images.numpy().transpose([0, 2, 3, 1])
+    #     plot_images(X, labels)
 
     return train_loader, valid_loader
 
