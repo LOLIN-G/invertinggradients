@@ -109,9 +109,6 @@ def search_in_outset(model, validloader, outsetloader):
         loss.backward()
     return
 
-
-
-
 def in_set_train(model, trainloader):
     model.train()
     model.cuda()

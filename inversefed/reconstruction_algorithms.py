@@ -59,13 +59,17 @@ class GradientReconstructor():
         self.loss_fn = torch.nn.CrossEntropyLoss(reduction='mean')
         self.iDLG = True
 
+    def myreconstrct(self, model, input_data, labels, img_shape=(3, 32, 32), dryrun=False, eval=True, tol=None):
+        self.model = model
+        x_optimal, stats = self.reconstruct(input_data, labels, img_shape=(3, 32, 32), dryrun=False, eval=True, tol=None)
+        # return self.reconstruct(input_data, labels, img_shape=(3, 32, 32), dryrun=False, eval=True, tol=None)
+        return x_optimal, stats
+
     def reconstruct(self, input_data, labels, img_shape=(3, 32, 32), dryrun=False, eval=True, tol=None):
         """Reconstruct image from gradient."""
         start_time = time.time()
         if eval:
             self.model.eval()
-
-
         stats = defaultdict(list)
         # initialize the recovery image:
         x = self._init_images(img_shape)
@@ -245,9 +249,6 @@ class GradientReconstructor():
                                             weights=self.config['weights'])
         print(f'Optimal result score: {stats["opt"]:2.4f}')
         return x_optimal, stats
-
-class myReconstruct(GradientReconstructor):
-
 
 class FedAvgReconstructor(GradientReconstructor):
     """Reconstruct an image from weights after n gradient descent steps."""
