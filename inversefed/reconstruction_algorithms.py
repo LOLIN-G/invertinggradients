@@ -246,6 +246,7 @@ class GradientReconstructor():
         print(f'Optimal result score: {stats["opt"]:2.4f}')
         return x_optimal, stats
 
+class myReconstruct(GradientReconstructor):
 
 
 class FedAvgReconstructor(GradientReconstructor):
