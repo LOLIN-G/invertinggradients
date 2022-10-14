@@ -5,7 +5,7 @@ Optional arguments can be found in inversefed/options.py
 
 import torch
 from torch import nn
-from torch.utils.data import SubsetRandomSampler
+from torch.utils.data import SubsetRandomSampler, DataLoader
 import torchvision
 
 import numpy as np
@@ -245,6 +245,9 @@ if __name__ == "__main__":
 
     # Get data:
     loss_fn, train_set, valid_set, trainloader, validloader = inversefed.construct_dataloaders(args.dataset, defs, data_path=args.data_path)
+    # load ImageNet:
+    imagenet = torchvision.datasets.ImageNet(root='/localscratch2/xuezhiyu/dataset/ImageNet', split='train')
+    imagenet_loader = DataLoader(imagenet)
 
     dm = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_mean"), **setup)[:, None, None]
     ds = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_std"), **setup)[:, None, None]
@@ -259,7 +262,7 @@ if __name__ == "__main__":
         model, model_seed = inversefed.construct_model(args.model, num_classes=10, num_channels=3)
     model.to(**setup)
     if args.open_aug:
-        model = train_model_w_open_set(model, train_set, validloader)
+        model = train_model_w_open_set(model, train_set, validloader, imagenet_loader)
     model.eval()
 
     # Sanity check: Validate model accuracy
