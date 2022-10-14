@@ -52,7 +52,7 @@ def construct_dataloaders(dataset, defs, data_path='~/data', shuffle=True, norma
     validloader = torch.utils.data.DataLoader(validset, batch_size=min(defs.batch_size, len(trainset)),
                                               shuffle=False, drop_last=False, num_workers=num_workers, pin_memory=PIN_MEMORY)
 
-    return loss_fn, train_set, validset, trainloader, validloader
+    return loss_fn, trainset, validset, trainloader, validloader
 
 
 def _build_cifar10(data_path, augmentations=True, normalize=True):
