@@ -215,7 +215,7 @@ def out_set_train(model, trainloader, validloader, outsetloader):
 
     return model, loss_per_epoch, aug_loss_per_epoch
 
-def train_model_w_open_set(model, train_dataset, validloader):
+def train_model_w_open_set(model, train_dataset, testloader):
     trainloader, validloader = split_trainset(train_dataset)
 
     # train:
@@ -234,9 +234,7 @@ def train_model_w_open_set(model, train_dataset, validloader):
         print('Epoch-{}'.format(t))
         model, loss_per_epoch, aug_loss_per_epoch = out_set_train(model, trainloader, validloader)
         print('Epoch: {}\tIn-domain Loss: {}\tOut-domain Loss: {}'.format(t, loss_per_epoch, aug_loss_per_epoch))
-
-
-
+    return model
 
 if __name__ == "__main__":
     # Choose GPU device and print status information:
@@ -261,7 +259,7 @@ if __name__ == "__main__":
         model, model_seed = inversefed.construct_model(args.model, num_classes=10, num_channels=3)
     model.to(**setup)
     if args.open_aug:
-        train_model_w_open_set(model, train_set)
+        model = train_model_w_open_set(model, train_set, validloader)
     model.eval()
 
     # Sanity check: Validate model accuracy
