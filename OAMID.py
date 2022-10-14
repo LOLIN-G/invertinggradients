@@ -81,11 +81,12 @@ def search_in_outset(model, validloader, outsetloader):
     model.zero_grad()
     model.eval()
     model.cuda()
-    criterion = nn.CELoss()
+    criterion = nn.CrossEntropyLoss()
     loss_per_epoch = []
     # train with train data:
     count = 0
     accumulated_grad = [torch.zeros_like(p.data).cuda() for p in model.parameters()]
+    print('Enumerate valid data to get grads')
     for inputs, labels in validloader:
         count += 1
         inputs, labels = inputs.cuda(), labels.cuda()
@@ -97,22 +98,65 @@ def search_in_outset(model, validloader, outsetloader):
         # append:
         loss_per_epoch.append(loss.item())
     for i, p in enumerate(model.parameters()):
-        accumulated_grad[i] += p.grad.data
+        accumulated_grad[i] += (p.grad.data / count)
     loss_per_epoch = sum(loss_per_epoch) / len(loss_per_epoch)
 
+    valid_grad_vec = None
+    flag = True
+    # grad_norm = torch.zeros(size=(1,), requires_grad=False).to(config.device)
+    num_params = 0
+    for g in accumulated_grad:
+        num_params += 1
+        a = torch.flatten(g.detach()).cuda()
+        if flag:
+            valid_grad_vec = a
+            flag = False
+        else:
+            valid_grad_vec = torch.cat([valid_grad_vec, a.cuda()], -1).cuda()
+    valid_grad_vec = valid_grad_vec.detach().cuda()
+
     # search one by one to find the augmented data
+    print('Search in out domain data')
+    threshold = 100
     model.zero_grad()
+    count = 0
+    selected_aug_data = torch.tensor([]).cpu()
+    selected_aug_label = torch.tensor([]).cpu()
     for data, label in outsetloader:
         data, label = data.cuda(), label.cuda()
         pred = model(data)
         loss = criterion(pred, label)
-        loss.backward()
-    return
+        param_grads = torch.autograd.grad(loss, [p for p in model.parameters() if p.requires_grad],
+                                          create_graph=True, retain_graph=False, allow_unused=True)
+        grad_vec = None
+        flag = True
+        # grad_norm = torch.zeros(size=(1,), requires_grad=False).to(config.device)
+        num_params = 0
+        for g in param_grads:
+            num_params += 1
+            a = torch.flatten(g.detach()).cuda()
+            if flag:
+                grad_vec = a
+                flag = False
+            else:
+                grad_vec = torch.cat([grad_vec, a], -1).cuda()
+        grad_vec = grad_vec.detach().cuda()
+
+        # tensor1_ = torch.zeros_like(tensor2).to(args.device) + tensor1
+        cos = torch.nn.CosineSimilarity(dim=1, eps=1e-6)
+        cos_value = cos(torch.unsqueeze(grad_vec, 0), torch.unsqueeze(valid_grad_vec, 0))
+        if cos_value >= 0.5:
+            count += 1
+            selected_aug_data = torch.cat((selected_aug_data.cpu(), data.cpu()), dim=0)
+            selected_aug_label = torch.cat((selected_aug_label, torch.randint(0, 10, (1,))), dim=0)
+            if count >= threshold:
+                break
+    return selected_aug_data, selected_aug_label
 
 def in_set_train(model, trainloader):
     model.train()
     model.cuda()
-    criterion = nn.MSELoss()
+    criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     loss_per_epoch = []
     for inputs, labels in trainloader:
@@ -133,10 +177,11 @@ def out_set_train(model, trainloader, validloader, outsetloader):
     # the outset loader is ImageNet
     model.train()
     model.cuda()
-    criterion = nn.CELoss()
+    criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     loss_per_epoch = []
     # train with train data:
+    print('In domain training')
     for inputs, labels in trainloader:
         inputs, labels = inputs.cuda(), labels.cuda()
         # forward:
@@ -152,14 +197,30 @@ def out_set_train(model, trainloader, validloader, outsetloader):
 
     # compare the gradient similarity with outset data
     # or use influence function:
+    print('Out domain training')
+    aug_loss_per_epoch = []
+    aug_data, aug_label = search_in_outset(model, validloader, outsetloader)
+    for data, label in zip(aug_data, aug_label):
+        inputs, label = inputs.cuda(), label.cuda()
+        # forward:
+        pred = model(inputs)
+        loss = criterion(pred, label)
+        # backward:
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        # append:
+        aug_loss_per_epoch.append(loss.item())
+    aug_loss_per_epoch = sum(aug_loss_per_epoch) / len(aug_loss_per_epoch)
 
-    return model, loss_per_epoch
+    return model, loss_per_epoch, aug_loss_per_epoch
 
 def train_model_w_open_set(model, train_dataset, validloader):
     trainloader, validloader = split_trainset(train_dataset)
 
     # train:
     epochs = 100
+    '''    
     print('Rough train:')
     for t in range(epochs):
         model, loss_per_epoch = in_set_train(model, trainloader)
@@ -167,13 +228,12 @@ def train_model_w_open_set(model, train_dataset, validloader):
         _t = t
         if loss_per_epoch <= 0.01:
             break
+    '''
     print('Out set train:')
-    if _t >= epochs:
-        _t = epochs - 10
-    for t in range(epochs - _t, epochs):
-        model, loss_per_epoch = out_set_train(model, trainloader, validloader)
-        print('Epoch: {}\tLoss: {}'.format(t, loss_per_epoch))
-
+    for t in range(epochs):
+        print('Epoch-{}'.format(t))
+        model, loss_per_epoch, aug_loss_per_epoch = out_set_train(model, trainloader, validloader)
+        print('Epoch: {}\tIn-domain Loss: {}\tOut-domain Loss: {}'.format(t, loss_per_epoch, aug_loss_per_epoch))
 
 
 
