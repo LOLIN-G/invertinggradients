@@ -246,8 +246,8 @@ if __name__ == "__main__":
     # Get data:
     loss_fn, train_set, valid_set, trainloader, validloader = inversefed.construct_dataloaders(args.dataset, defs, data_path=args.data_path)
     # load ImageNet:
-    imagenet = torchvision.datasets.ImageNet(root='/localscratch2/xuezhiyu/dataset/ImageNet', split='train')
-    imagenet_loader = DataLoader(imagenet)
+    imagenet = torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/train')
+    imagenet_loader = DataLoader(imagenet, batch_size=1, shuffle=True)
 
     dm = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_mean"), **setup)[:, None, None]
     ds = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_std"), **setup)[:, None, None]
