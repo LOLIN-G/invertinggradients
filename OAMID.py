@@ -18,6 +18,7 @@ import datetime
 import time
 import os
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "%s" % ('3')
 torch.backends.cudnn.benchmark = inversefed.consts.BENCHMARK
 
 # Parse input arguments
@@ -200,7 +201,7 @@ def out_set_train(model, trainloader, validloader, outsetloader):
     print('Out domain training')
     aug_loss_per_epoch = []
     aug_data, aug_label = search_in_outset(model, validloader, outsetloader)
-    for data, label in zip(aug_data, aug_label):
+    for inputs, label in zip(aug_data, aug_label):
         inputs, label = inputs.cuda(), label.cuda()
         # forward:
         pred = model(inputs)
@@ -215,7 +216,7 @@ def out_set_train(model, trainloader, validloader, outsetloader):
 
     return model, loss_per_epoch, aug_loss_per_epoch
 
-def train_model_w_open_set(model, train_dataset, testloader):
+def train_model_w_open_set(model, train_dataset, testloader, outsetloader):
     trainloader, validloader = split_trainset(train_dataset)
 
     # train:
@@ -232,7 +233,7 @@ def train_model_w_open_set(model, train_dataset, testloader):
     print('Out set train:')
     for t in range(epochs):
         print('Epoch-{}'.format(t))
-        model, loss_per_epoch, aug_loss_per_epoch = out_set_train(model, trainloader, validloader)
+        model, loss_per_epoch, aug_loss_per_epoch = out_set_train(model, trainloader, validloader, outsetloader)
         print('Epoch: {}\tIn-domain Loss: {}\tOut-domain Loss: {}'.format(t, loss_per_epoch, aug_loss_per_epoch))
     return model
 
@@ -246,8 +247,9 @@ if __name__ == "__main__":
     # Get data:
     loss_fn, train_set, valid_set, trainloader, validloader = inversefed.construct_dataloaders(args.dataset, defs, data_path=args.data_path)
     # load ImageNet:
-    imagenet = torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/train')
-    imagenet_loader = DataLoader(imagenet, batch_size=1, shuffle=True)
+    # imagenet = torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/train')
+    # imagenet_loader = DataLoader(imagenet, batch_size=1, shuffle=True)
+    imagenet_loader = validloader
 
     dm = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_mean"), **setup)[:, None, None]
     ds = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_std"), **setup)[:, None, None]
