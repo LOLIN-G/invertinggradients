@@ -205,7 +205,7 @@ def out_set_train(model, trainloader, validloader, outsetloader):
         inputs, label = inputs.cuda(), label.cuda()
         # forward:
         pred = model(inputs.unsqueeze(dim=0))
-        loss = criterion(pred, label)
+        loss = criterion(pred, label.unsqueeze(dim=0))
         # backward:
         optimizer.zero_grad()
         loss.backward()
