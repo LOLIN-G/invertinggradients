@@ -122,7 +122,7 @@ def search_in_outset(model, validloader, outsetloader):
     model.zero_grad()
     count = 0
     selected_aug_data = torch.tensor([]).cpu()
-    selected_aug_label = torch.tensor([]).cpu()
+    selected_aug_label = torch.tensor([]).cpu().int()
     for data, label in outsetloader:
         data, label = data.cuda(), label.cuda()
         pred = model(data)
@@ -205,8 +205,8 @@ def out_set_train(model, trainloader, validloader, outsetloader):
         inputs, label = inputs.cuda(), label.cuda()
         # forward:
         pred = model(inputs.unsqueeze(dim=0))
-        print(pred)
-        print(label)
+        # print(pred)
+        # print(label)
         loss = criterion(pred, label.unsqueeze(dim=0))
         # backward:
         optimizer.zero_grad()
