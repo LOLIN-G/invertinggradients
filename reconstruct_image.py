@@ -50,8 +50,6 @@ if __name__ == "__main__":
     else:
         model, model_seed = inversefed.construct_model(args.model, num_classes=10, num_channels=3)
     model.to(**setup)
-    if args.open_aug:
-        train_model_w_open_set(model, train_set)
     model.eval()
 
     # Sanity check: Validate model accuracy
