@@ -245,13 +245,11 @@ if __name__ == "__main__":
     start_time = time.time()
 
     # Prepare for training
-
     # Get data:
     loss_fn, train_set, valid_set, trainloader, validloader = inversefed.construct_dataloaders(args.dataset, defs, data_path=args.data_path)
     # load ImageNet:
-    # imagenet = torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/train')
-    # imagenet_loader = DataLoader(imagenet, batch_size=1, shuffle=True)
-    imagenet_loader = validloader
+    imagenet = torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/train')
+    imagenet_loader = DataLoader(imagenet, batch_size=1, shuffle=True)
 
     dm = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_mean"), **setup)[:, None, None]
     ds = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_std"), **setup)[:, None, None]
