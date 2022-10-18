@@ -95,7 +95,7 @@ def search_in_outset(model, validloader, outsetloader):
     valid_grad_vec = valid_grad_vec.detach().cuda()
 
     # search one by one to find the augmented data
-    print('Search in out domain data')
+    print('Search in out-domain data')
     threshold = 100
     model.zero_grad()
     count = 0
@@ -104,9 +104,12 @@ def search_in_outset(model, validloader, outsetloader):
     for data, label in outsetloader:
         data, label = data.cuda(), label.cuda()
         pred = model(data)
+        print(pred)
         loss = criterion(pred, label)
-        param_grads = torch.autograd.grad(loss, [p for p in model.parameters() if p.requires_grad],)
+        print(loss)
+        # param_grads = torch.autograd.grad(loss, [p for p in model.parameters() if p.requires_grad])
                                           # create_graph=True, retain_graph=False, allow_unused=True)
+        param_grads = torch.autograd.grad(loss, model.parameters())
         grad_vec = None
         flag = True
         # grad_norm = torch.zeros(size=(1,), requires_grad=False).to(config.device)
@@ -128,7 +131,7 @@ def search_in_outset(model, validloader, outsetloader):
             count += 1
             selected_aug_data = torch.cat((selected_aug_data.cpu(), data.cpu()), dim=0)
             pseudo_label = assign_pseudo_label(model, data)
-            selected_aug_label = torch.cat((selected_aug_label, pseudo_label), dim=0)
+            selected_aug_label = torch.cat((selected_aug_label.cpu(), pseudo_label.cpu()), dim=0)
             if count >= threshold:
                 break
     return selected_aug_data, selected_aug_label
