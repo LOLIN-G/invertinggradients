@@ -31,17 +31,6 @@ if args.deterministic:
     inversefed.utils.set_deterministic()
 
 def split_trainset(train_dataset, valid_size=0.3, batch_size=64, random_seed=1, shuffle=True, num_workers=8, show_sample=False):
-    '''
-    def get_train_valid_loader(data_dir,
-                           batch_size,
-                           augment,
-                           random_seed,
-                           valid_size=0.1,
-                           shuffle=True,
-                           show_sample=False,
-                           num_workers=4,
-                           pin_memory=False):
-    '''
     num_train = len(train_dataset)
     indices = list(range(num_train))
     split = int(np.floor(valid_size * num_train))
@@ -62,18 +51,6 @@ def split_trainset(train_dataset, valid_size=0.3, batch_size=64, random_seed=1, 
         train_dataset, batch_size=batch_size, sampler=valid_sampler,
         num_workers=num_workers, drop_last=False,
     )
-
-    # visualize some images
-    # if show_sample:
-    #     sample_loader = torch.utils.data.DataLoader(
-    #         train_dataset, batch_size=9, shuffle=shuffle,
-    #         num_workers=num_workers, pin_memory=pin_memory,
-    #     )
-    #     data_iter = iter(sample_loader)
-    #     images, labels = data_iter.next()
-    #     X = images.numpy().transpose([0, 2, 3, 1])
-    #     plot_images(X, labels)
-
     return train_loader, valid_loader
 
 def search_in_outset(model, validloader, outsetloader):
@@ -149,10 +126,22 @@ def search_in_outset(model, validloader, outsetloader):
         if cos_value >= 0.5:
             count += 1
             selected_aug_data = torch.cat((selected_aug_data.cpu(), data.cpu()), dim=0)
-            selected_aug_label = torch.cat((selected_aug_label, torch.randint(0, 10, (1,))), dim=0)
+            pseudo_label = assign_pseudo_label(model, data)
+            selected_aug_label = torch.cat((selected_aug_label, pseudo_label), dim=0)
             if count >= threshold:
                 break
     return selected_aug_data, selected_aug_label
+
+def assign_pseudo_label(model, data):
+    threshold = 0.7
+    if args.pseudo_label == 'random':
+        return torch.randint(0, 10, (1,))
+    if args.pseudo_label == 'knn':
+        pass
+    if args.pseudo_label == 'combine':
+        pseudo_pred = model(data).argmax()
+        if pseudo_pred >= threshold:
+            pass
 
 def in_set_train(model, trainloader):
     model.train()
@@ -194,28 +183,28 @@ def out_set_train(model, trainloader, validloader, outsetloader):
         optimizer.step()
         # append:
         loss_per_epoch.append(loss.item())
+
+        # compare the gradient similarity with outset data
+        # or use influence function:
+        print('Out domain training')
+        aug_loss_per_epoch = []
+        aug_data, aug_label = search_in_outset(model, validloader, outsetloader)
+        for inputs, label in zip(aug_data, aug_label):
+            inputs, label = inputs.cuda(), label.cuda()
+            # forward:
+            pred = model(inputs.unsqueeze(dim=0))
+            # print(pred)
+            # print(label)
+            loss = criterion(pred, label.unsqueeze(dim=0))
+            # backward:
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            # append:
+            aug_loss_per_epoch.append(loss.item())
+        aug_loss_per_epoch = sum(aug_loss_per_epoch) / len(aug_loss_per_epoch)
+
     loss_per_epoch = sum(loss_per_epoch) / len(loss_per_epoch)
-
-    # compare the gradient similarity with outset data
-    # or use influence function:
-    print('Out domain training')
-    aug_loss_per_epoch = []
-    aug_data, aug_label = search_in_outset(model, validloader, outsetloader)
-    for inputs, label in zip(aug_data, aug_label):
-        inputs, label = inputs.cuda(), label.cuda()
-        # forward:
-        pred = model(inputs.unsqueeze(dim=0))
-        # print(pred)
-        # print(label)
-        loss = criterion(pred, label.unsqueeze(dim=0))
-        # backward:
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        # append:
-        aug_loss_per_epoch.append(loss.item())
-    aug_loss_per_epoch = sum(aug_loss_per_epoch) / len(aug_loss_per_epoch)
-
     return model, loss_per_epoch, aug_loss_per_epoch
 
 def train_model_w_open_set(model, train_dataset, testloader, outsetloader):
@@ -223,15 +212,6 @@ def train_model_w_open_set(model, train_dataset, testloader, outsetloader):
 
     # train:
     epochs = 100
-    '''    
-    print('Rough train:')
-    for t in range(epochs):
-        model, loss_per_epoch = in_set_train(model, trainloader)
-        print('Epoch: {}\tLoss: {}'.format(t, loss_per_epoch))
-        _t = t
-        if loss_per_epoch <= 0.01:
-            break
-    '''
     print('Out set train:')
     for t in range(epochs):
         print('Epoch-{}'.format(t))
