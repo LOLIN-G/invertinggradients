@@ -101,6 +101,8 @@ def search_in_outset(model, validloader, outsetloader):
     count = 0
     selected_aug_data = torch.tensor([]).cpu()
     selected_aug_label = torch.tensor([]).cpu().int()
+    print(selected_aug_label)
+    print(selected_aug_label.dtype)
     for data, label in outsetloader:
         data, label = data.cuda(), label.cuda()
         pred = model(data)
