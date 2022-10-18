@@ -7,6 +7,7 @@ import torch
 from torch import nn
 from torch.utils.data import SubsetRandomSampler, DataLoader
 import torchvision
+import torchvision.transforms as transforms
 
 import numpy as np
 from PIL import Image
@@ -57,7 +58,7 @@ def search_in_outset(model, validloader, outsetloader):
     # outset loader is ImageNet
     # the batch size of outset loader should be 1
     model.zero_grad()
-    model.eval()
+    # model.eval()
     model.cuda()
     criterion = nn.CrossEntropyLoss()
     loss_per_epoch = []
@@ -104,8 +105,8 @@ def search_in_outset(model, validloader, outsetloader):
         data, label = data.cuda(), label.cuda()
         pred = model(data)
         loss = criterion(pred, label)
-        param_grads = torch.autograd.grad(loss, [p for p in model.parameters() if p.requires_grad],
-                                          create_graph=True, retain_graph=False, allow_unused=True)
+        param_grads = torch.autograd.grad(loss, [p for p in model.parameters() if p.requires_grad],)
+                                          # create_graph=True, retain_graph=False, allow_unused=True)
         grad_vec = None
         flag = True
         # grad_norm = torch.zeros(size=(1,), requires_grad=False).to(config.device)
@@ -228,7 +229,14 @@ if __name__ == "__main__":
     # Get data:
     loss_fn, train_set, valid_set, trainloader, validloader = inversefed.construct_dataloaders(args.dataset, defs, data_path=args.data_path)
     # load ImageNet:
-    imagenet = torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/train')
+    data_transform = transforms.Compose([
+        transforms.Resize(32),
+        transforms.CenterCrop(32),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                             std=[0.229, 0.224, 0.225])
+    ])
+    imagenet = torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/val', transform=data_transform)
     imagenet_loader = DataLoader(imagenet, batch_size=1, shuffle=True)
 
     dm = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_mean"), **setup)[:, None, None]
