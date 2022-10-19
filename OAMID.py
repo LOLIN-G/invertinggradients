@@ -19,7 +19,6 @@ from collections import defaultdict
 import datetime
 import time
 import os
-import mymodels
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "%s" % ('3')
 torch.backends.cudnn.benchmark = inversefed.consts.BENCHMARK
