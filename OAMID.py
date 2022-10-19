@@ -103,6 +103,7 @@ def search_in_outset(model, validloader, outsetloader):
     model.zero_grad()
     
     count = 0
+    ss
     selected_aug_data = torch.tensor([]).cpu()
     selected_aug_label = torch.tensor([]).cpu().int()
     for data, label in outsetloader:
