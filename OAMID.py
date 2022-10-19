@@ -3,6 +3,7 @@
 Optional arguments can be found in inversefed/options.py
 """
 
+from pkgutil import ImpLoader
 import torch
 from torch import nn
 from torch.utils.data import SubsetRandomSampler, DataLoader
@@ -18,6 +19,7 @@ from collections import defaultdict
 import datetime
 import time
 import os
+import mymodels
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "%s" % ('3')
 torch.backends.cudnn.benchmark = inversefed.consts.BENCHMARK
@@ -58,6 +60,7 @@ def search_in_outset(model, validloader, outsetloader):
     # outset loader is ImageNet
     # the batch size of outset loader should be 1
     model.zero_grad()
+    model.train()
     # model.eval()
     model.cuda()
     criterion = nn.CrossEntropyLoss()
@@ -96,19 +99,17 @@ def search_in_outset(model, validloader, outsetloader):
 
     # search one by one to find the augmented data
     print('Search in out-domain data')
-    threshold = 100
+    threshold = 32
     model.zero_grad()
+    
     count = 0
     selected_aug_data = torch.tensor([]).cpu()
     selected_aug_label = torch.tensor([]).cpu().int()
-    print(selected_aug_label)
-    print(selected_aug_label.dtype)
     for data, label in outsetloader:
         data, label = data.cuda(), label.cuda()
+        pseudo_label = assign_pseudo_label(model, data)
         pred = model(data)
-        print(pred)
-        loss = criterion(pred, label)
-        print(loss)
+        loss = criterion(pred, pseudo_label)
         # param_grads = torch.autograd.grad(loss, [p for p in model.parameters() if p.requires_grad])
                                           # create_graph=True, retain_graph=False, allow_unused=True)
         param_grads = torch.autograd.grad(loss, model.parameters())
@@ -129,19 +130,20 @@ def search_in_outset(model, validloader, outsetloader):
         # tensor1_ = torch.zeros_like(tensor2).to(args.device) + tensor1
         cos = torch.nn.CosineSimilarity(dim=1, eps=1e-6)
         cos_value = cos(torch.unsqueeze(grad_vec, 0), torch.unsqueeze(valid_grad_vec, 0))
-        if cos_value >= 0.5:
+        if cos_value >= 0.1:
             count += 1
             selected_aug_data = torch.cat((selected_aug_data.cpu(), data.cpu()), dim=0)
             pseudo_label = assign_pseudo_label(model, data)
             selected_aug_label = torch.cat((selected_aug_label.cpu(), pseudo_label.cpu()), dim=0)
             if count >= threshold:
                 break
+    print('find {} aug samples'.format(len(selected_aug_label)))
     return selected_aug_data, selected_aug_label
 
 def assign_pseudo_label(model, data):
     threshold = 0.7
     if args.pseudo_label == 'random':
-        return torch.randint(0, 10, (1,))
+        return torch.randint(0, 10, (1,)).cuda()
     if args.pseudo_label == 'knn':
         pass
     if args.pseudo_label == 'combine':
@@ -213,8 +215,8 @@ def out_set_train(model, trainloader, validloader, outsetloader):
     loss_per_epoch = sum(loss_per_epoch) / len(loss_per_epoch)
     return model, loss_per_epoch, aug_loss_per_epoch
 
-def train_model_w_open_set(model, train_dataset, testloader, outsetloader):
-    trainloader, validloader = split_trainset(train_dataset)
+def train_model_w_open_set(model, trainset, trainloader, validset, validloader, outsetloader):
+    trainloader, validloader = split_trainset(trainset)
 
     # train:
     epochs = 100
@@ -227,6 +229,8 @@ def train_model_w_open_set(model, train_dataset, testloader, outsetloader):
 
 if __name__ == "__main__":
     # Choose GPU device and print status information:
+    os.environ["CUDA_VISIBLE_DEVICES"] = "%s" % ('3')
+
     setup = inversefed.utils.system_startup(args)
     start_time = time.time()
 
@@ -243,6 +247,7 @@ if __name__ == "__main__":
     ])
     imagenet = torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/val', transform=data_transform)
     imagenet_loader = DataLoader(imagenet, batch_size=1, shuffle=True)
+    # imagenet_loader = validloader
 
     dm = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_mean"), **setup)[:, None, None]
     ds = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_std"), **setup)[:, None, None]
@@ -255,9 +260,11 @@ if __name__ == "__main__":
         model_seed = None
     else:
         model, model_seed = inversefed.construct_model(args.model, num_classes=10, num_channels=3)
-    model.to(**setup)
+    # model.to(**setup)
+    # model = mymodels.load_model('resnet18', 10)
+    model.cuda()
     if args.open_aug:
-        model = train_model_w_open_set(model, train_set, validloader, imagenet_loader)
+        model = train_model_w_open_set(model, train_set, trainloader, valid_set, validloader, imagenet_loader)
     model.eval()
 
     # Sanity check: Validate model accuracy
