@@ -195,9 +195,9 @@ def out_set_train(model, trainloader, validloader, outsetloader):
 
         # compare the gradient similarity with outset data
         # or use influence function:
-        print('Out domain training')
         aug_loss_per_epoch = []
         aug_data, aug_label = search_in_outset(model, validloader, outsetloader)
+        print('Out domain training')
         for inputs, label in zip(aug_data, aug_label):
             inputs, label = inputs.cuda(), label.cuda()
             # forward:
