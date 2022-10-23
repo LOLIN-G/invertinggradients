@@ -20,7 +20,7 @@ import datetime
 import time
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "%s" % ('3')
+os.environ["CUDA_VISIBLE_DEVICES"] = "%s" % ('1')
 torch.backends.cudnn.benchmark = inversefed.consts.BENCHMARK
 
 # Parse input arguments
@@ -98,12 +98,12 @@ def search_in_outset(model, validloader, outsetloader):
 
     # search one by one to find the augmented data
     print('Search in out-domain data')
-    threshold = 32
     model.zero_grad()
     
     count = 0
     selected_aug_data = torch.tensor([]).cpu()
     selected_aug_label = torch.tensor([]).cpu().int()
+    # for idx, (data, label) in enumerate(outsetloader):
     for data, label in outsetloader:
         data, label = data.cuda(), label.cuda()
         pseudo_label = assign_pseudo_label(model, data)
@@ -134,9 +134,9 @@ def search_in_outset(model, validloader, outsetloader):
             selected_aug_data = torch.cat((selected_aug_data.cpu(), data.cpu()), dim=0)
             pseudo_label = assign_pseudo_label(model, data)
             selected_aug_label = torch.cat((selected_aug_label.cpu(), pseudo_label.cpu()), dim=0)
-            if count >= threshold:
+            if count >= args.threshold:
                 break
-    print('find {} aug samples'.format(len(selected_aug_label)))
+    print('Find {} aug samples. The final index of sample is {}'.format(len(selected_aug_label), 1))
     return selected_aug_data, selected_aug_label
 
 def assign_pseudo_label(model, data):
@@ -228,7 +228,7 @@ def train_model_w_open_set(model, trainset, trainloader, validset, validloader, 
 
 if __name__ == "__main__":
     # Choose GPU device and print status information:
-    os.environ["CUDA_VISIBLE_DEVICES"] = "%s" % ('3')
+    os.environ["CUDA_VISIBLE_DEVICES"] = "%s" % ('1')
 
     setup = inversefed.utils.system_startup(args)
     start_time = time.time()
