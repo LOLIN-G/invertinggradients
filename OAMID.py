@@ -105,8 +105,8 @@ def search_in_outset(model, validloader, outsetloader):
     selected_aug_data = torch.tensor([]).cpu()
     selected_aug_label = torch.tensor([]).cpu().int()
     similarities = []
-    # for idx, (data, label) in enumerate(outsetloader):
-    for data, label in outsetloader:
+    for idx, (data, label) in enumerate(outsetloader):
+    # for data, label in outsetloader:
         count += 1
         data, label = data.cuda(), label.cuda()
         pseudo_label = assign_pseudo_label(model, data)
@@ -144,7 +144,7 @@ def search_in_outset(model, validloader, outsetloader):
             break
     mean = np.mean(np.array(similarities))
     std = np.std(np.array(similarities))
-    print('Find {} aug data. Final index : {}.\nSimilarity: [{}, {}] ( mean: {} std: {} )'.format(len(selected_aug_label), 1, min(similarities), max(similarities), mean, std))
+    print('Find {} aug data. Final index : {}.\nSimilarity: [{:.4}, {:.4}] ( mean: {:.4} std: {:.4} )'.format(len(selected_aug_label), idx, min(similarities), max(similarities), mean, std))
     return selected_aug_data, selected_aug_label
 
 def assign_pseudo_label(model, data):
