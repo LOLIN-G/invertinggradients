@@ -103,6 +103,7 @@ def search_in_outset(model, validloader, outsetloader):
     count = 0
     selected_aug_data = torch.tensor([]).cpu()
     selected_aug_label = torch.tensor([]).cpu().int()
+    similarities = []
     # for idx, (data, label) in enumerate(outsetloader):
     for data, label in outsetloader:
         data, label = data.cuda(), label.cuda()
@@ -129,14 +130,15 @@ def search_in_outset(model, validloader, outsetloader):
         # tensor1_ = torch.zeros_like(tensor2).to(args.device) + tensor1
         cos = torch.nn.CosineSimilarity(dim=1, eps=1e-6)
         cos_value = cos(torch.unsqueeze(grad_vec, 0), torch.unsqueeze(valid_grad_vec, 0))
-        if cos_value >= 0.1:
+        similarities.append(cos_value.item())
+        if cos_value >= args.cos_threshold:
             count += 1
             selected_aug_data = torch.cat((selected_aug_data.cpu(), data.cpu()), dim=0)
             pseudo_label = assign_pseudo_label(model, data)
             selected_aug_label = torch.cat((selected_aug_label.cpu(), pseudo_label.cpu()), dim=0)
             if count >= args.threshold:
                 break
-    print('Find {} aug samples. The final index of sample is {}'.format(len(selected_aug_label), 1))
+    print('Find {} aug data. Final index : {}. Similarity: [{}, {}]'.format(len(selected_aug_label), 1, min(similarities), max(similarities)))
     return selected_aug_data, selected_aug_label
 
 def assign_pseudo_label(model, data):
