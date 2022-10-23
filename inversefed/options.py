@@ -7,7 +7,7 @@ def options():
     parser = argparse.ArgumentParser(description='Reconstruct some image from a trained model.')
 
     # Central:
-    parser.add_argument('--model', default='ConvNet', type=str, help='Vision model.')
+    parser.add_argument('--model', default='ResNet18', type=str, help='Vision model.')
     parser.add_argument('--dataset', default='CIFAR10', type=str)
     parser.add_argument('--dtype', default='float', type=str, help='Data type used during reconstruction [Not during training!].')
 
