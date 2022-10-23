@@ -142,7 +142,9 @@ def search_in_outset(model, validloader, outsetloader):
                 break
         if count >= 1000:
             break
-    print('Find {} aug data. Final index : {}. Similarity: [{}, {}]'.format(len(selected_aug_label), 1, min(similarities), max(similarities)))
+    mean = np.mean(np.array(similarities))
+    std = np.std(np.array(similarities))
+    print('Find {} aug data. Final index : {}.\nSimilarity: [{}, {}] ( mean: {} std: {} )'.format(len(selected_aug_label), 1, min(similarities), max(similarities), mean, std))
     return selected_aug_data, selected_aug_label
 
 def assign_pseudo_label(model, data):
