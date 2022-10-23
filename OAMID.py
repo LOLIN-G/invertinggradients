@@ -6,7 +6,7 @@ Optional arguments can be found in inversefed/options.py
 from pkgutil import ImpLoader
 import torch
 from torch import nn
-from torch.utils.data import SubsetRandomSampler, DataLoader
+from torch.utils.data import SubsetRandomSampler, DataLoader, Subset
 import torchvision
 import torchvision.transforms as transforms
 
@@ -101,11 +101,13 @@ def search_in_outset(model, validloader, outsetloader):
     model.zero_grad()
     
     count = 0
+    num_aug_data = 0
     selected_aug_data = torch.tensor([]).cpu()
     selected_aug_label = torch.tensor([]).cpu().int()
     similarities = []
     # for idx, (data, label) in enumerate(outsetloader):
     for data, label in outsetloader:
+        count += 1
         data, label = data.cuda(), label.cuda()
         pseudo_label = assign_pseudo_label(model, data)
         pred = model(data)
@@ -132,12 +134,14 @@ def search_in_outset(model, validloader, outsetloader):
         cos_value = cos(torch.unsqueeze(grad_vec, 0), torch.unsqueeze(valid_grad_vec, 0))
         similarities.append(cos_value.item())
         if cos_value >= args.cos_threshold:
-            count += 1
+            num_aug_data += 1
             selected_aug_data = torch.cat((selected_aug_data.cpu(), data.cpu()), dim=0)
             pseudo_label = assign_pseudo_label(model, data)
             selected_aug_label = torch.cat((selected_aug_label.cpu(), pseudo_label.cpu()), dim=0)
-            if count >= args.threshold:
+            if num_aug_data >= args.threshold:
                 break
+        if count >= 1000:
+            break
     print('Find {} aug data. Final index : {}. Similarity: [{}, {}]'.format(len(selected_aug_label), 1, min(similarities), max(similarities)))
     return selected_aug_data, selected_aug_label
 
@@ -211,7 +215,10 @@ def out_set_train(model, trainloader, validloader, outsetloader):
             optimizer.step()
             # append:
             aug_loss_per_epoch.append(loss.item())
-        aug_loss_per_epoch = sum(aug_loss_per_epoch) / len(aug_loss_per_epoch)
+        if not aug_loss_per_epoch:
+            aug_loss_per_epoch = 0.0
+        else:
+            aug_loss_per_epoch = sum(aug_loss_per_epoch) / len(aug_loss_per_epoch)
 
     loss_per_epoch = sum(loss_per_epoch) / len(loss_per_epoch)
     return model, loss_per_epoch, aug_loss_per_epoch
@@ -246,8 +253,9 @@ if __name__ == "__main__":
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
                              std=[0.229, 0.224, 0.225])
     ])
+    # imagenet = Subset(torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/val', transform=data_transform), indices=list(range(1000)))
     imagenet = torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/val', transform=data_transform)
-    imagenet_loader = DataLoader(imagenet, batch_size=1, shuffle=True)
+    imagenet_loader = DataLoader(imagenet, batch_size=1, shuffle=True, num_workers=8)
     # imagenet_loader = validloader
 
     dm = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_mean"), **setup)[:, None, None]
