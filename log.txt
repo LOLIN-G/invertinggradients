@@ -1,0 +1,13 @@
+Currently evaluating -------------------------------:
+Sunday, 23. October 2022 11:17AM
+CPUs: 52, GPUs: 4 on illidan-gpu-10.
+Namespace(accumulation=0, boxed=True, cos_threshold=0.7, cost_fn='sim', data_path='/localscratch/hbzhang/data', dataset='CIFAR10', deterministic=False, dryrun=False, dtype='float', epochs=120, image_path='images/', indices='def', init='randn', label_flip=False, model='ResNet18', model_path='models/', name='iv', num_images=1, open_aug=True, optim='ours', optimizer='adam', pseudo_label='random', restarts=1, save_image=False, scoring_choice='loss', signed=True, table_path='tables/', target_id=None, threshold=32, trained_model=False, tv=0.0001, weights='equal')
+GPU : NVIDIA RTX A5000
+Files already downloaded and verified
+Files already downloaded and verified
+Model initialized with random key 2736296522.
+Out set train:
+Epoch-0
+In domain training
+Out domain training
+Enumerate valid data to get grads
