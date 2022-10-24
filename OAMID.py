@@ -144,6 +144,7 @@ def search_in_outset(model, validloader, outsetloader):
             break
     mean = np.mean(np.array(similarities))
     std = np.std(np.array(similarities))
+
     print('Find {} aug data. Final index : {}.\nSimilarity: [{:.4}, {:.4}] ( mean: {:.4} std: {:.4} )'.format(len(selected_aug_label), idx, min(similarities), max(similarities), mean, std))
     return selected_aug_data, selected_aug_label
 
@@ -255,8 +256,8 @@ if __name__ == "__main__":
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
                              std=[0.229, 0.224, 0.225])
     ])
-    # imagenet = Subset(torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/val', transform=data_transform), indices=list(range(1000)))
-    imagenet = torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/val', transform=data_transform)
+    imagenet = Subset(torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/val', transform=data_transform), indices=list(range(1000)))
+    # imagenet = torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/val', transform=data_transform)
     imagenet_loader = DataLoader(imagenet, batch_size=1, shuffle=True, num_workers=8)
     # imagenet_loader = validloader
 
