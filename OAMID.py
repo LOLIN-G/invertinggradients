@@ -144,8 +144,29 @@ def search_in_outset(model, validloader, outsetloader):
             break
     mean = np.mean(np.array(similarities))
     std = np.std(np.array(similarities))
+    max_sim = max(similarities)
+    min_sim = min(similarities)
 
-    print('Find {} aug data. Final index : {}.\nSimilarity: [{:.4}, {:.4}] ( mean: {:.4} std: {:.4} )'.format(len(selected_aug_label), idx, min(similarities), max(similarities), mean, std))
+    sigma1 = mean + std
+    sigma2 = sigma1 + std
+    sigma3 = sigma2 + std
+    bin1, bin2, bin3, bin4 = 0.0, 0.0, 0.0, 0.0
+    for sim in similarities:
+        if (sim > -sigma1) and (sim < sigma1):
+            bin1 += 1
+        elif (sim > -sigma2) and (sim < sigma2):
+            bin2 += 1
+        elif (sim > -sigma3) and (sim < sigma3):
+            bin3 += 1
+        else:
+            bin4 += 1
+    bin1 /= len(similarities)
+    bin2 /= len(similarities)
+    bin3 /= len(similarities)
+    bin4 /= len(similarities)
+
+    print('Find {} aug data. Final index : {}.\nSimilarity: [{:.4}, {:.4}] ( mean: {:.4} std: {:.4} )'.format(len(selected_aug_label), idx, min_sim, max_sim, mean, std))
+    print('Freq of each bin: {:.4}  {:.4}  {:.4}  {:.4}'.format(bin1, bin2, bin3, bin4))
     return selected_aug_data, selected_aug_label
 
 def assign_pseudo_label(model, data):
