@@ -416,6 +416,8 @@ if __name__ == "__main__":
     imagenet = Subset(torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/val', transform=data_transform), indices=list(range(1000)))
     # imagenet = torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/val', transform=data_transform)
     imagenet_loader = DataLoader(imagenet, batch_size=1, shuffle=True, num_workers=8)
+
+    stl_loader = inversefed.construct_dataloaders('STL', defs, data_path=args.data_path)
     # imagenet_loader = validloader
 
     dm = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_mean"), **setup)[:, None, None]
