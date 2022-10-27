@@ -378,7 +378,7 @@ def out_set_train(model, trainloader, validloader, outsetloader):
             aug_loss_per_epoch = 0.0
         else:
             aug_loss_per_epoch = sum(aug_loss_per_epoch) / len(aug_loss_per_epoch)
-
+        break
     loss_per_epoch = sum(loss_per_epoch) / len(loss_per_epoch)
     return model, loss_per_epoch, aug_loss_per_epoch
 
