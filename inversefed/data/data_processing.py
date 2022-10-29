@@ -90,10 +90,10 @@ def _build_STL(data_path, augmentations=True, normalize=True):
     """Define CIFAR-10 with everything considered."""
     # Load data
     cifar10_mean = None
-    TRAIN_DATA_PATH = '/localscratch2/hbzhang/stl10_binary/train_X.bin'
-    TRAIN_LABEL_PATH = '/localscratch2/hbzhang/stl10_binary/train_y.bin'
-    TEST_DATA_PATH = '/localscratch2/hbzhang/stl10_binary/test_X.bin'
-    TEST_LABEL_PATH = '/localscratch2/hbzhang/stl10_binary/test_y.bin'
+    TRAIN_DATA_PATH = '/localscratch2/hbzhang/STL/train_X.bin'
+    TRAIN_LABEL_PATH = '/localscratch2/hbzhang/STL/train_y.bin'
+    TEST_DATA_PATH = '/localscratch2/hbzhang/STL/test_X.bin'
+    TEST_LABEL_PATH = '/localscratch2/hbzhang/STL/test_y.bin'
 
     def read_labels(path_to_labels):
         with open(path_to_labels, 'rb') as f:

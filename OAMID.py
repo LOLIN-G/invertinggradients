@@ -58,6 +58,8 @@ def split_trainset(train_dataset, valid_size=0.3, batch_size=64, random_seed=1, 
 def recover(model, trainloader, validloader, loss_fn):
     dm = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_mean"), **setup)[:, None, None]
     ds = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_std"), **setup)[:, None, None]
+    print('dm:', dm)
+    print('ds:', ds)
 
     # Choose example images from the validation set or from third-party sources
     if args.num_images == 1:
@@ -360,7 +362,7 @@ def out_set_train(model, trainloader, validloader, outsetloader):
         # or use influence function:
         aug_loss_per_epoch = []
         aug_data, aug_label = search_in_outset(model, validloader, outsetloader)
-        print('Out domain training')
+        # print('Out domain training')
         for inputs, label in zip(aug_data, aug_label):
             inputs, label = inputs.cuda(), label.cuda()
             # forward:
