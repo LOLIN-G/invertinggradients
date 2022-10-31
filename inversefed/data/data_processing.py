@@ -1,7 +1,8 @@
 """Repeatable code parts concerning data loading."""
-
+import numpy as np
 
 import torch
+from torch.utils.data import TensorDataset
 import torchvision
 import torchvision.transforms as transforms
 
@@ -22,6 +23,9 @@ def construct_dataloaders(dataset, defs, data_path='~/data', shuffle=True, norma
         loss_fn = Classification()
     elif dataset == 'CIFAR100':
         trainset, validset = _build_cifar100(path, defs.augmentations, normalize)
+        loss_fn = Classification()
+    elif dataset == 'STL':
+        trainset, validset = _build_STL(path, defs.augmentations, normalize)
         loss_fn = Classification()
     elif dataset == 'MNIST':
         trainset, validset = _build_mnist(path, defs.augmentations, normalize)
@@ -60,6 +64,62 @@ def _build_cifar10(data_path, augmentations=True, normalize=True):
     # Load data
     trainset = torchvision.datasets.CIFAR10(root=data_path, train=True, download=True, transform=transforms.ToTensor())
     validset = torchvision.datasets.CIFAR10(root=data_path, train=False, download=True, transform=transforms.ToTensor())
+
+    if cifar10_mean is None:
+        data_mean, data_std = _get_meanstd(trainset)
+    else:
+        data_mean, data_std = cifar10_mean, cifar10_std
+
+    # Organize preprocessing
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(data_mean, data_std) if normalize else transforms.Lambda(lambda x: x)])
+    if augmentations:
+        transform_train = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transform])
+        trainset.transform = transform_train
+    else:
+        trainset.transform = transform
+    validset.transform = transform
+
+    return trainset, validset
+
+def _build_STL(data_path, augmentations=True, normalize=True):
+    """Define CIFAR-10 with everything considered."""
+    # Load data
+    cifar10_mean = None
+    TRAIN_DATA_PATH = '/localscratch2/hbzhang/STL/train_X.bin'
+    TRAIN_LABEL_PATH = '/localscratch2/hbzhang/STL/train_y.bin'
+    TEST_DATA_PATH = '/localscratch2/hbzhang/STL/test_X.bin'
+    TEST_LABEL_PATH = '/localscratch2/hbzhang/STL/test_y.bin'
+
+    def read_labels(path_to_labels):
+        with open(path_to_labels, 'rb') as f:
+            labels = np.fromfile(f, dtype=np.uint8)
+            return labels
+
+    def read_all_images(path_to_data):
+        with open(path_to_data, 'rb') as f:
+            # read whole file in uint8 chunks
+            everything = np.fromfile(f, dtype=np.uint8)
+            images = np.reshape(everything, (-1, 3, 96, 96))
+            # images = np.transpose(images, (0, 3, 2, 1))
+            return images
+
+    train_X = read_all_images(TRAIN_DATA_PATH)
+    train_y = read_labels(TRAIN_LABEL_PATH)
+    test_X = read_all_images(TEST_DATA_PATH)
+    test_y = read_labels(TEST_LABEL_PATH)
+
+    train_X = torch.from_numpy(train_X).float()
+    train_y = torch.from_numpy(train_y).long()
+    test_X = torch.from_numpy(test_X).float()
+    test_y = torch.from_numpy(test_y).long()
+
+    trainset = TensorDataset(train_X, train_y)
+    validset = TensorDataset(test_X, test_y)
 
     if cifar10_mean is None:
         data_mean, data_std = _get_meanstd(trainset)
@@ -202,7 +262,7 @@ def _build_imagenet(data_path, augmentations=True, normalize=True):
     return trainset, validset
 
 
-def _get_meanstd(dataset):
+def _get_meanstd(trainset):
     cc = torch.cat([trainset[i][0].reshape(3, -1) for i in range(len(trainset))], dim=1)
     data_mean = torch.mean(cc, dim=1).tolist()
     data_std = torch.std(cc, dim=1).tolist()

@@ -22,7 +22,7 @@ def options():
     parser.add_argument('--open_aug', default=True, type=bool, help='If True, use open-set data to augmentationally train the model.')
     parser.add_argument('--pseudo_label', default='random', type=str, help='choose the pesudo label method')
     parser.add_argument('--threshold', default=32, type=int, help='the threshold number for open-set data')
-    parser.add_argument('--cos_threshold', default=0.7, type=int, help='the cos threshold for gradient similarity')
+    parser.add_argument('--cos_threshold', default=0.4, type=int, help='the cos threshold for gradient similarity')
 
     # Rec. parameters
     parser.add_argument('--optim', default='ours', type=str, help='Use our reconstruction method or the DLG method.')

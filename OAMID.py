@@ -55,6 +55,143 @@ def split_trainset(train_dataset, valid_size=0.3, batch_size=64, random_seed=1, 
     )
     return train_loader, valid_loader
 
+def recover(model, trainloader, validloader, loss_fn):
+    dm = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_mean"), **setup)[:, None, None]
+    ds = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_std"), **setup)[:, None, None]
+    print('dm:', dm)
+    print('ds:', ds)
+
+    # Choose example images from the validation set or from third-party sources
+    if args.num_images == 1:
+        if args.target_id == -1:  # demo image
+            # Specify PIL filter for lower pillow versions
+            ground_truth = torch.as_tensor(
+                np.array(Image.open("auto.jpg").resize((32, 32), Image.BICUBIC)) / 255, **setup
+            )
+            ground_truth = ground_truth.permute(2, 0, 1).sub(dm).div(ds).unsqueeze(0).contiguous()
+            if not args.label_flip:
+                labels = torch.as_tensor((1,), device=setup["device"])
+            else:
+                labels = torch.as_tensor((5,), device=setup["device"])
+            target_id = -1
+        else:
+            if args.target_id is None:
+                target_id = np.random.randint(len(validloader.dataset))
+            else:
+                target_id = args.target_id
+            ground_truth, labels = validloader.dataset[target_id]
+            if args.label_flip:
+                labels = (labels + 1) % len(trainloader.dataset.classes)
+            ground_truth, labels = (
+                ground_truth.unsqueeze(0).to(**setup),
+                torch.as_tensor((labels,), device=setup["device"]),
+            )
+        img_shape = (3, ground_truth.shape[2], ground_truth.shape[3])
+
+    else: # multi-image
+        ground_truth, labels = [], []
+        if args.target_id is None:
+            target_id = np.random.randint(len(validloader.dataset))
+        else:
+            target_id = args.target_id
+        while len(labels) < args.num_images:
+            img, label = validloader.dataset[target_id]
+            target_id += 1
+            if label not in labels: # different labels in
+                labels.append(torch.as_tensor((label,), device=setup["device"]))
+                ground_truth.append(img.to(**setup))
+
+        ground_truth = torch.stack(ground_truth)
+        labels = torch.cat(labels)
+        if args.label_flip:
+            labels = (labels + 1) % len(trainloader.dataset.classes)
+        img_shape = (3, ground_truth.shape[2], ground_truth.shape[3])
+
+    # Run reconstruction
+    if args.accumulation == 0:
+        model.zero_grad()
+        target_loss, _, _ = loss_fn(model(ground_truth), labels)
+        input_gradient = torch.autograd.grad(target_loss, model.parameters())
+        input_gradient = [grad.detach() for grad in input_gradient]
+        full_norm = torch.stack([g.norm() for g in input_gradient]).mean()
+        print(f"Full gradient norm is {full_norm:e}.")
+
+        # Run reconstruction in different precision?
+        if args.dtype != "float":
+            if args.dtype in ["double", "float64"]:
+                setup["dtype"] = torch.double
+            elif args.dtype in ["half", "float16"]:
+                setup["dtype"] = torch.half
+            else:
+                raise ValueError(f"Unknown data type argument {args.dtype}.")
+            print(f"Model and input parameter moved to {args.dtype}-precision.")
+            dm = torch.as_tensor(inversefed.consts.cifar10_mean, **setup)[:, None, None]
+            ds = torch.as_tensor(inversefed.consts.cifar10_std, **setup)[:, None, None]
+            ground_truth = ground_truth.to(**setup)
+            input_gradient = [g.to(**setup) for g in input_gradient]
+            model.to(**setup)
+            model.eval()
+
+        if args.optim == "ours":
+            config = dict(
+                signed=args.signed,
+                boxed=args.boxed,
+                cost_fn=args.cost_fn,
+                indices="def",
+                weights="equal",
+                lr=0.1,
+                optim=args.optimizer,
+                restarts=args.restarts,
+                max_iterations=24_000,
+                total_variation=args.tv,
+                init="randn",
+                filter="none",
+                lr_decay=True,
+                scoring_choice="loss",
+            )
+        elif args.optim == "zhu":
+            config = dict(
+                signed=False,
+                boxed=False,
+                cost_fn="l2",
+                indices="def",
+                weights="equal",
+                lr=1e-4,
+                optim="LBFGS",
+                restarts=args.restarts,
+                max_iterations=300,
+                total_variation=args.tv,
+                init=args.init,
+                filter="none",
+                lr_decay=False,
+                scoring_choice=args.scoring_choice,
+            )
+
+        rec_machine = inversefed.GradientReconstructor(model, (dm, ds), config, num_images=args.num_images)
+        output, stats = rec_machine.reconstruct(input_gradient, labels, img_shape=img_shape, dryrun=args.dryrun)
+    # Compute stats
+    test_mse = (output - ground_truth).pow(2).mean().item()
+    feat_mse = (model(output) - model(ground_truth)).pow(2).mean().item()
+    test_psnr = inversefed.metrics.psnr(output, ground_truth, factor=1 / ds)
+
+    # Save the resulting image
+    if args.save_image and not args.dryrun:
+        os.makedirs(args.image_path, exist_ok=True)
+        output_denormalized = torch.clamp(output * ds + dm, 0, 1)
+        rec_filename = (
+            f'{validloader.dataset.classes[labels][0]}_{"trained" if args.trained_model else ""}'
+            f"{args.model}_{args.cost_fn}-{args.target_id}.png"
+        )
+        torchvision.utils.save_image(output_denormalized, os.path.join(args.image_path, rec_filename))
+
+        gt_denormalized = torch.clamp(ground_truth * ds + dm, 0, 1)
+        gt_filename = f"{validloader.dataset.classes[labels][0]}_ground_truth-{args.target_id}.png"
+        torchvision.utils.save_image(gt_denormalized, os.path.join(args.image_path, gt_filename))
+    else:
+        rec_filename = None
+        gt_filename = None
+
+
 def search_in_outset(model, validloader, outsetloader):
     # outset loader is ImageNet
     # the batch size of outset loader should be 1
@@ -67,7 +204,7 @@ def search_in_outset(model, validloader, outsetloader):
     # train with train data:
     count = 0
     accumulated_grad = [torch.zeros_like(p.data).cuda() for p in model.parameters()]
-    print('Enumerate valid data to get grads')
+    # print('Enumerate valid data to get grads')
     for inputs, labels in validloader:
         count += 1
         inputs, labels = inputs.cuda(), labels.cuda()
@@ -97,7 +234,7 @@ def search_in_outset(model, validloader, outsetloader):
     valid_grad_vec = valid_grad_vec.detach().cuda()
 
     # search one by one to find the augmented data
-    print('Search in out-domain data')
+    # print('Search in out-domain data')
     model.zero_grad()
     
     count = 0
@@ -105,8 +242,8 @@ def search_in_outset(model, validloader, outsetloader):
     selected_aug_data = torch.tensor([]).cpu()
     selected_aug_label = torch.tensor([]).cpu().int()
     similarities = []
-    # for idx, (data, label) in enumerate(outsetloader):
-    for data, label in outsetloader:
+    for idx, (data, label) in enumerate(outsetloader):
+    # for data, label in outsetloader:
         count += 1
         data, label = data.cuda(), label.cuda()
         pseudo_label = assign_pseudo_label(model, data)
@@ -144,7 +281,29 @@ def search_in_outset(model, validloader, outsetloader):
             break
     mean = np.mean(np.array(similarities))
     std = np.std(np.array(similarities))
-    print('Find {} aug data. Final index : {}.\nSimilarity: [{}, {}] ( mean: {} std: {} )'.format(len(selected_aug_label), 1, min(similarities), max(similarities), mean, std))
+    max_sim = max(similarities)
+    min_sim = min(similarities)
+
+    sigma1 = mean + std
+    sigma2 = sigma1 + std
+    sigma3 = sigma2 + std
+    bin1, bin2, bin3, bin4 = 0.0, 0.0, 0.0, 0.0
+    for sim in similarities:
+        if (sim > -sigma1) and (sim < sigma1):
+            bin1 += 1
+        elif (sim > -sigma2) and (sim < sigma2):
+            bin2 += 1
+        elif (sim > -sigma3) and (sim < sigma3):
+            bin3 += 1
+        else:
+            bin4 += 1
+    bin1 /= len(similarities)
+    bin2 /= len(similarities)
+    bin3 /= len(similarities)
+    bin4 /= len(similarities)
+
+    # print('Find {} aug data. Final index : {}.\nSimilarity: [{:.4}, {:.4}] ( mean: {:.4} std: {:.4} )'.format(len(selected_aug_label), idx, min_sim, max_sim, mean, std))
+    # print('Freq of each bin: {:.4}  {:.4}  {:.4}  {:.4}'.format(bin1, bin2, bin3, bin4))
     return selected_aug_data, selected_aug_label
 
 def assign_pseudo_label(model, data):
@@ -203,7 +362,7 @@ def out_set_train(model, trainloader, validloader, outsetloader):
         # or use influence function:
         aug_loss_per_epoch = []
         aug_data, aug_label = search_in_outset(model, validloader, outsetloader)
-        print('Out domain training')
+        # print('Out domain training')
         for inputs, label in zip(aug_data, aug_label):
             inputs, label = inputs.cuda(), label.cuda()
             # forward:
@@ -221,20 +380,21 @@ def out_set_train(model, trainloader, validloader, outsetloader):
             aug_loss_per_epoch = 0.0
         else:
             aug_loss_per_epoch = sum(aug_loss_per_epoch) / len(aug_loss_per_epoch)
-
+        break
     loss_per_epoch = sum(loss_per_epoch) / len(loss_per_epoch)
     return model, loss_per_epoch, aug_loss_per_epoch
 
-def train_model_w_open_set(model, trainset, trainloader, validset, validloader, outsetloader):
+def train_model_w_open_set(model, trainset, trainloader, testset, testloader, outsetloader, loss_fn):
     trainloader, validloader = split_trainset(trainset)
 
     # train:
     epochs = 100
     print('Out set train:')
     for t in range(epochs):
-        print('Epoch-{}'.format(t))
+        # print('Epoch-{}'.format(t))
         model, loss_per_epoch, aug_loss_per_epoch = out_set_train(model, trainloader, validloader, outsetloader)
         print('Epoch: {}\tIn-domain Loss: {}\tOut-domain Loss: {}'.format(t, loss_per_epoch, aug_loss_per_epoch))
+        recover(model, trainloader, testloader, loss_fn)
     return model
 
 if __name__ == "__main__":
@@ -255,9 +415,11 @@ if __name__ == "__main__":
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
                              std=[0.229, 0.224, 0.225])
     ])
-    # imagenet = Subset(torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/val', transform=data_transform), indices=list(range(1000)))
-    imagenet = torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/val', transform=data_transform)
+    imagenet = Subset(torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/val', transform=data_transform), indices=list(range(1000)))
+    # imagenet = torchvision.datasets.ImageFolder(root='/localscratch2/xuezhiyu/dataset/ImageNet/val', transform=data_transform)
     imagenet_loader = DataLoader(imagenet, batch_size=1, shuffle=True, num_workers=8)
+
+    stl_loader = inversefed.construct_dataloaders('STL', defs, data_path=args.data_path)
     # imagenet_loader = validloader
 
     dm = torch.as_tensor(getattr(inversefed.consts, f"{args.dataset.lower()}_mean"), **setup)[:, None, None]
@@ -275,7 +437,7 @@ if __name__ == "__main__":
     # model = mymodels.load_model('resnet18', 10)
     model.cuda()
     if args.open_aug:
-        model = train_model_w_open_set(model, train_set, trainloader, valid_set, validloader, imagenet_loader)
+        model = train_model_w_open_set(model, train_set, trainloader, valid_set, validloader, imagenet_loader, loss_fn)
     model.eval()
 
     # Sanity check: Validate model accuracy
